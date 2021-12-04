@@ -1,0 +1,4 @@
+aiofiles==0.8.0
+discord.py==1.7.3
+python-dotenv==0.19.2
+twitchio==2.1.3
