@@ -5,8 +5,9 @@ Twitch / Discord / Twitter bot for https://twitch.tv/lynnya_tw
 1. Copy `.env.example` to a new text file named `.env` (notice there is no .txt extension, this is intentional)
 2. Review all of the settings in this new file. These will need to be updated by you in order for the bot to function.
 3. You'll notice that a lot of these settings are tokens for other services or are hard to understand, so please read the sections below if you need help.
-6. Finally, run the bot with `py bot.py` if you are on Windows, or `python3 bot.py` otherwise. If you are not using a terminal, you can probably double-click `bot.py` and your operating system should work out how to run the application for you.
-7. If you need additional help running the bot, please DM me on Discord (`lynn#3368`) instead of creating a GitHub issue, unless you're actually reporting a bug or requesting a new feature.
+4. Run `install.bat` if you're on Windows, or `install.sh` otherwise. If the script fails for some reason, just use `pip` to install the modules in `requirements.txt` if you know how.
+5. Finally, run the bot with `py bot.py` if you are on Windows, or `python3 bot.py` otherwise. If you are not using a terminal, you can probably double-click `bot.py` and your operating system should work out how to run the application for you.
+6. If you need additional help running the bot, please DM me on Discord (`lynn#3368`) instead of creating a GitHub issue, unless you're actually reporting a bug or requesting a new feature.
 
 ### Adding a Discord token
 1. Go to the [Discord developer page](https://discord.com/developers/applications) and log in.
