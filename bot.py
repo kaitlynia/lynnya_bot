@@ -338,10 +338,14 @@ async def main():
 
   async def status_command(ctx: AllContext):
     twitch_channel = await twitch_bot.fetch_channel(BROADCASTER_CHANNEL)
-    await ctx.reply(f'''{"**Online**" if await is_live() else "Offline"}
+    online = await is_live()
+    status = '**Online**' if online else 'Offline'
+    stream_link = f'https://twitch.tv/{BROADCASTER_CHANNEL}'
+    stream_link_embedded = stream_link if online else f'<{stream_link}/>'
+    await ctx.reply(f'''{status}
 **Title:** {twitch_channel.title}
 **Game:** ({twitch_channel.game_name})
-**Stream:** https://twitch.tv/{BROADCASTER_CHANNEL}''')
+**Stream:** {stream_link_embedded}''')
 
   async def alert_command(ctx: AllContext):
     if ctx.is_mod:
