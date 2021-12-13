@@ -1,2 +1,2 @@
 # lynnya_bot
-Twitch / Discord bot for https://twitch.tv/lynnya_tw
+Twitch / Discord / Twitter bot for https://twitch.tv/lynnya_tw
