@@ -1,4 +1,6 @@
 aiofiles==0.8.0
 discord.py==1.7.3
+peony==1.0.34
+peony_twitter==2.0.2
 python-dotenv==0.19.2
 twitchio==2.1.3
