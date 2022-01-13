@@ -1,3 +1,4 @@
+import ast
 import asyncio
 import json
 import os
@@ -88,7 +89,8 @@ class Data(dict, Loggable):
   defaults = {
     'prefix:twitch': DEFAULT_PREFIX,
     'prefix:discord': DEFAULT_PREFIX,
-    'currency_emoji': DEFAULT_CURRENCY_EMOJI
+    'currency_emoji': DEFAULT_CURRENCY_EMOJI,
+    'bal:sorted': []
   }
 
   def __init__(self, path: str):
@@ -391,11 +393,13 @@ async def main():
       timestamp_key = f'daily_ts:{ctx.user_id}'
       now = time.time()
       # if 12 hours have passed since the last daily claim
-      if now >= data.get(timestamp_key, 0) + (60 * 60 * 12):
+      if now >= (timestamp := data.get(timestamp_key, 0)) + (60 * 60 * 12):
         data[timestamp_key] = now
         reward = random.randint(10, 50)
         bal_key = f'bal:{ctx.user_id}'
         bal = data[bal_key] = data.get(bal_key, 0) + reward
+        if timestamp == 0:
+          data['bal:sorted'] = list(sorted(data['bal:sorted'] + [str(ctx.user_id)], key=lambda u: data.get(f'bal:{u}', 0), reverse=True))
         await data.save()
         emoji = data['currency_emoji']
         await ctx.reply(f'Thanks for claiming your daily! Got {reward}{emoji}, Total: {bal}{emoji}')
@@ -403,6 +407,12 @@ async def main():
         await ctx.reply('You have already claimed a daily in the last 12 hours! Try again later.')
     else:
       await ctx.reply(f'Since {BROADCASTER_CHANNEL} is not live, the daily command cannot be used.')
+
+  async def lb_command(ctx: AllContext):
+    channels = await asyncio.gather(*(twitch_bot.fetch_channel(i) for i in data.get('bal:sorted', [])[:10]))
+    names = (c.user.name for c in channels)
+    result = ', '.join(f'{i}. {n}' for i, n in enumerate(names, start=1))
+    await ctx.reply(f'{data.get("currency_emoji")} leaderboard: {result}')
 
   async def bal_command(ctx: AllContext):
     if ctx.user_id is None:
@@ -421,7 +431,7 @@ async def main():
         data[f'link_code:{code}'] = ctx.source_id
         link_for_key = f'link_for:{ctx.source_id}'
         if link_for_key in data:
-          del data[f'link_code:{data[link_for_key]}]']
+          del data[f'link_code:{data[link_for_key]}']
         data[link_for_key] = code
         await data.save()
         await (await discord_bot.fetch_user(ctx.source_id)).send(f'Use `{data["prefix:twitch"]}link {code}` in Twitch chat (<https://twitch.tv/{BROADCASTER_CHANNEL}/>) to link your account.')
@@ -440,6 +450,9 @@ async def main():
           await ctx.reply('Invalid code.')
       else:
         await ctx.reply(f'Missing code argument. Use {data["prefix:discord"]}link in Discord to link your accounts.')
+
+  async def eval_command(ctx: AllContext, *args):
+    await ctx.reply(str(ast.literal_eval(' '.join(args))))
 
   async def test_command(ctx: AllContext):
     await ctx.reply('Testing!')
@@ -462,8 +475,10 @@ async def main():
     twitter_command,
     youtube_command,
     daily_command,
+    lb_command,
     bal_command,
     link_command,
+    eval_command,
     test_command
   )
 
