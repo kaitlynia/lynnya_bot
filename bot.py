@@ -457,6 +457,44 @@ async def main():
   async def youtube_command(ctx: AllContext, *args):
     await basic_command(ctx, 'info:youtube', 'YouTube link', 'Subscribe to lynnya on YouTube: ', *args)
 
+  async def edit_command(ctx: AllContext, *args):
+    if ctx.is_mod:
+      if len(args) < 2:
+        return await ctx.reply('Missing message argument.')
+      name = args[0]
+      data[f'info:{name}'] = ' '.join(args[1:])
+      await ctx.reply('The {name} command was successfully edited!')
+
+  async def link_command(ctx: AllContext, *code):
+    if ctx.source_type is discord.Context:
+      discord_to_twitch_key = f'discord:{ctx.source_id}'
+      if discord_to_twitch_key in data:
+        await ctx.reply('Your Discord account is already linked.')
+      else:
+        code = '%030x' % random.randrange(16**30)
+        data[f'link_code:{code}'] = ctx.source_id
+        link_for_key = f'link_for:{ctx.source_id}'
+        if link_for_key in data:
+          del data[f'link_code:{data[link_for_key]}']
+        data[link_for_key] = code
+        await data.save()
+        await (await discord_bot.fetch_user(ctx.source_id)).send(f'Use `{data["prefix:twitch"]}link {code}` in Twitch chat (<https://twitch.tv/{BROADCASTER_CHANNEL}/>) to link your account.')
+        await ctx.reply('A link code has been sent to you in a direct message.')
+    elif ctx.source_type is twitch.Context:
+      if len(code):
+        try:
+          link_key = f'link_code:{code[0]}'
+          discord_id = data[link_key]
+          data[f'discord:{discord_id}'] = ctx.source_id
+          del data[f'link_for:{discord_id}']
+          del data[link_key]
+          await data.save()
+          await ctx.reply('Your Discord account was successfully linked!')
+        except KeyError:
+          await ctx.reply('Invalid code.')
+      else:
+        await ctx.reply(f'Missing code argument. Use {data["prefix:discord"]}link in Discord to link your accounts.')
+
   async def status_command(ctx: AllContext):
     twitch_channel = await twitch_bot.fetch_channel(BROADCASTER_CHANNEL)
     online = await is_live()
@@ -539,36 +577,6 @@ async def main():
     bal_key = f'bal:{ctx.user_id}'
     emoji = data['currency_emoji']
     await ctx.reply(f'You have {data.get(bal_key, 0)}{emoji}')
-
-  async def link_command(ctx: AllContext, *code):
-    if ctx.source_type is discord.Context:
-      discord_to_twitch_key = f'discord:{ctx.source_id}'
-      if discord_to_twitch_key in data:
-        await ctx.reply('Your Discord account is already linked.')
-      else:
-        code = '%030x' % random.randrange(16**30)
-        data[f'link_code:{code}'] = ctx.source_id
-        link_for_key = f'link_for:{ctx.source_id}'
-        if link_for_key in data:
-          del data[f'link_code:{data[link_for_key]}']
-        data[link_for_key] = code
-        await data.save()
-        await (await discord_bot.fetch_user(ctx.source_id)).send(f'Use `{data["prefix:twitch"]}link {code}` in Twitch chat (<https://twitch.tv/{BROADCASTER_CHANNEL}/>) to link your account.')
-        await ctx.reply('A link code has been sent to you in a direct message.')
-    elif ctx.source_type is twitch.Context:
-      if len(code):
-        try:
-          link_key = f'link_code:{code[0]}'
-          discord_id = data[link_key]
-          data[f'discord:{discord_id}'] = ctx.source_id
-          del data[f'link_for:{discord_id}']
-          del data[link_key]
-          await data.save()
-          await ctx.reply('Your Discord account was successfully linked!')
-        except KeyError:
-          await ctx.reply('Invalid code.')
-      else:
-        await ctx.reply(f'Missing code argument. Use {data["prefix:discord"]}link in Discord to link your accounts.')
 
   add_commands(
     alert_command,
