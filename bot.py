@@ -456,8 +456,6 @@ async def main():
   ### COMMANDS ###
   ################
 
-  # TODO: catch CommandNotFound so it stops clogging my logging
-
   async def code_command(ctx: AllContext, *args):
     await basic_command(ctx, 'info:lobby', 'Lobby code', 'Lobby code: ', *args)
   async def ddnet_command(ctx: AllContext, *args):
