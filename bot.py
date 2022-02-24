@@ -44,6 +44,7 @@ BROADCASTER_CHANNEL = os.getenv('BROADCASTER_CHANNEL')
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
 DISCORD_BROADCASTER_ID = int(os.getenv('DISCORD_BROADCASTER_ID'))
 DISCORD_STAFF_CHANNEL_ID = int(os.getenv('DISCORD_STAFF_CHANNEL_ID'))
+DISCORD_SUBSCRIBER_ROLE_ID = int(os.getenv('DISCORD_SUBSCRIBER_ROLE_ID'))
 DISCORD_ALERTS_CHANNEL_ID = int(os.getenv('DISCORD_ALERTS_CHANNEL_ID'))
 DISCORD_ALERTS_ROLE_ID = int(os.getenv('DISCORD_ALERTS_ROLE_ID'))
 DISCORD_CLOSED_VOICE_CHANNEL_ID = int(os.getenv('DISCORD_CLOSED_VOICE_CHANNEL_ID'))
@@ -143,6 +144,7 @@ class AllContext:
     self.system_content = None
     self.clean_content = None
     self.is_mod = None
+    self.is_subscriber = None
 
     self.user_id = None
     self.reply = None
@@ -150,6 +152,7 @@ class AllContext:
     # context check to populate user_id
     if self.source_type is discord.Context:
       self.is_mod = ctx.author.permissions_in(ctx.bot.get_channel(DISCORD_STAFF_CHANNEL_ID)).view_channel
+      self.is_subscriber = any(role.id == DISCORD_SUBSCRIBER_ROLE_ID for role in ctx.author.roles)
       self.system_content = ctx.message.system_content
       self.clean_content = ctx.message.clean_content
       self.timestamp = ctx.message.created_at.timestamp()
@@ -165,6 +168,7 @@ class AllContext:
 
     elif self.source_type is twitch.Context:
       self.is_mod = ctx.author.is_mod
+      self.is_subscriber = ctx.author.is_subscriber
       self.system_content = ctx.message.raw_data
       self.clean_content = ctx.message.raw_data
       self.timestamp = ctx.message.timestamp.timestamp()
@@ -580,7 +584,8 @@ async def main():
       # if 12 hours have passed since the last daily claim
       if now >= (timestamp := data.get(timestamp_key, 0)) + (60 * 60 * 12):
         data[timestamp_key] = now
-        reward = random.randint(10, 50)
+        max_reward = 100 if ctx.is_subscriber else 50
+        reward = random.randint(10, max_reward)
         bal_key = f'bal:{ctx.user_id}'
         bal = data[bal_key] = data.get(bal_key, 0) + reward
         if timestamp == 0:
@@ -606,6 +611,16 @@ async def main():
     emoji = data['currency_emoji']
     await ctx.reply(f'You have {data.get(bal_key, 0)}{emoji}')
 
+  async def buybox_command(ctx: AllContext):
+    pass
+
+  async def sub_command(ctx: AllContext):
+    if ctx.is_subscriber:
+      await ctx.reply('uwu yes you are a sub')
+    else:
+      await ctx.reply('wtf why aren\'t you subbed????')
+
+
   add_commands(
     edit_command,
     alert_command,
@@ -627,7 +642,8 @@ async def main():
     daily_command,
     lb_command,
     bal_command,
-    link_command
+    link_command,
+    sub_command
   )
 
   await discord_bot.login(DISCORD_TOKEN)
