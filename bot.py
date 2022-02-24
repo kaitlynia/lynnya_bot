@@ -570,12 +570,6 @@ async def main():
       else:
         await ctx.reply(f'Missing code argument. Use {data["prefix:discord"]}link in Discord to link your accounts.')
 
-  async def eval_command(ctx: AllContext, *args):
-    await ctx.reply(str(ast.literal_eval(' '.join(args))))
-
-  async def test_command(ctx: AllContext):
-    await ctx.reply('Testing!')
-
   add_commands(
     alert_command,
     tweet_command,
@@ -596,9 +590,7 @@ async def main():
     daily_command,
     lb_command,
     bal_command,
-    link_command,
-    eval_command,
-    test_command
+    link_command
   )
 
   await discord_bot.login(DISCORD_TOKEN)
