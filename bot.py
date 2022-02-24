@@ -61,6 +61,9 @@ TWITTER_ALERT_FORMAT = '{} ({})\n\nhttps://twitch.tv/{}'
 DEFAULT_PREFIX = os.getenv('DEFAULT_PREFIX')
 DEFAULT_CURRENCY_EMOJI = os.getenv('DEFAULT_CURRENCY_EMOJI')
 
+DISCORD_PREFIX_KEY = 'prefix:discord'
+TWITCH_PREFIX_KEY = 'prefix:twitch'
+
 def print_box(message: str):
   l = len(message)
   print(
@@ -87,8 +90,8 @@ class Loggable:
 class Data(dict, Loggable):
   log_as = LOG_DATA_AS
   defaults = {
-    'prefix:twitch': DEFAULT_PREFIX,
-    'prefix:discord': DEFAULT_PREFIX,
+    TWITCH_PREFIX_KEY: DEFAULT_PREFIX,
+    DISCORD_PREFIX_KEY: DEFAULT_PREFIX,
     'currency_emoji': DEFAULT_CURRENCY_EMOJI,
     'bal:sorted': []
   }
@@ -145,7 +148,7 @@ class AllContext:
     self.reply = None
 
     # context check to populate user_id
-    if type(ctx) is discord.Context:
+    if self.source_type is discord.Context:
       self.is_mod = ctx.author.permissions_in(ctx.bot.get_channel(DISCORD_STAFF_CHANNEL_ID)).view_channel
       self.system_content = ctx.message.system_content
       self.clean_content = ctx.message.clean_content
@@ -160,7 +163,7 @@ class AllContext:
         await ctx.reply(formatted)
       self.reply = __reply
 
-    elif type(ctx) is twitch.Context:
+    elif self.source_type is twitch.Context:
       self.is_mod = ctx.author.is_mod
       self.system_content = ctx.message.raw_data
       self.clean_content = ctx.message.raw_data
@@ -183,6 +186,15 @@ class AllContext:
 
     else:
       raise RuntimeError(f'unsupported context type: {type(ctx)}')
+
+  @property
+  def prefix(self):
+    if self.source_type is discord.Context:
+      return self.data[DISCORD_PREFIX_KEY]
+    elif self.source_type is twitch.Context:
+      return self.data[TWITCH_PREFIX_KEY]
+    else:
+      raise RuntimeError(f'unknown prefix for source type: {type(self.source_type)}')
 
 
 class TwitchBot(twitch.Bot, Loggable):
@@ -215,7 +227,7 @@ class DiscordBot(discord.Bot, Loggable):
   log_as = LOG_DISCORD_AS
 
   def __init__(self, data: Data):
-    super().__init__(command_prefix=data['prefix:discord'])
+    super().__init__(command_prefix=data[DISCORD_PREFIX_KEY])
     self.data = data
 
   async def login(self, token: str):
@@ -462,10 +474,14 @@ async def main():
   async def edit_command(ctx: AllContext, *args):
     if ctx.is_mod:
       if len(args) < 2:
-        return await ctx.reply('Missing message argument.')
+        return await ctx.reply('Missing info message argument.')
       name = args[0]
-      data[f'info:{name}'] = ' '.join(args[1:])
-      await ctx.reply('The {name} command was successfully edited!')
+      key = f'info:{name}'
+      if key in data:
+        data[key] = ' '.join(args[1:])
+        await ctx.reply('Info for "{name}" updated!')
+      else:
+        await ctx.reply('Info for "{name}"  was not found.')
 
   async def link_command(ctx: AllContext, *code):
     if ctx.source_type is discord.Context:
@@ -495,7 +511,7 @@ async def main():
         except KeyError:
           await ctx.reply('Invalid code.')
       else:
-        await ctx.reply(f'Missing code argument. Use {data["prefix:discord"]}link in Discord to link your accounts.')
+        await ctx.reply(f'Missing code argument. Use {data[DISCORD_PREFIX_KEY]}link in Discord to link your accounts.')
 
   async def status_command(ctx: AllContext):
     twitch_channel = await twitch_bot.fetch_channel(BROADCASTER_CHANNEL)
@@ -547,7 +563,7 @@ async def main():
 
   async def daily_command(ctx: AllContext):
     if ctx.user_id is None:
-      return await ctx.reply(f'This command requires a linked Discord account. Use {data["prefix:discord"]}link in Discord to link your accounts.')
+      return await ctx.reply(f'This command requires a linked Discord account. Use {data[DISCORD_PREFIX_KEY]}link in Discord to link your accounts.')
     if (await is_live()):
       timestamp_key = f'daily_ts:{ctx.user_id}'
       now = time.time()
@@ -575,7 +591,7 @@ async def main():
 
   async def bal_command(ctx: AllContext):
     if ctx.user_id is None:
-      return await ctx.reply(f'This command requires a linked Discord account. Use {data["prefix:discord"]}link in Discord to link your accounts.')
+      return await ctx.reply(f'This command requires a linked Discord account. Use {data[DISCORD_PREFIX_KEY]}link in Discord to link your accounts.')
     bal_key = f'bal:{ctx.user_id}'
     emoji = data['currency_emoji']
     await ctx.reply(f'You have {data.get(bal_key, 0)}{emoji}')
