@@ -1,4 +1,3 @@
-import ast
 import asyncio
 import json
 import os
@@ -11,7 +10,6 @@ from discord.errors import LoginFailure as DiscordAuthFailure
 from discord.ext import commands as discord
 from dotenv import load_dotenv
 from peony import PeonyClient
-from peony.oauth_dance import async_oauth_dance
 from twitchio.errors import AuthenticationError as TwitchAuthFailure
 from twitchio.ext import commands as twitch
 
@@ -125,11 +123,18 @@ class Data(dict, Loggable):
 
   async def save(self):
     self.log_info('saving data')
+
+    async with aiopen(self.path) as aiof:
+      backup = await self.__read_dict_from_file(aiof)
+
     try:
       async with aiopen(self.path, 'w') as aiof:
         await self.__write_dict_to_file(self, aiof)
       self.log_done('saved data')
     except Exception as exc:
+      async with aiopen(self.path, 'w') as aiof:
+        await self.__write_dict_to_file(backup, aiof)
+
       self.log_error('an error occurred while saving data:')
       raise exc
 
@@ -323,6 +328,9 @@ async def main():
     else:
       await ctx.reply(f'{intro}{data.get(key, unavailable)}')
 
+  async def reply_not_linked(ctx: AllContext):
+    return await ctx.reply(f'This command requires a linked Discord account. Use {data[DISCORD_PREFIX_KEY]}link in Discord to link your accounts.')
+
   @discord_bot.event
   async def on_voice_state_update(member, before, after):
     if member.id == DISCORD_BROADCASTER_ID:
@@ -359,9 +367,51 @@ async def main():
   async def __limit_commands_to_channels(ctx: discord.Context):
     return ctx.guild is not None and ctx.channel.id in DISCORD_CHANNEL_IDS
 
-  #####################
-  ### RPG CONSTANTS ###
-  #####################
+  #################
+  ### RPG LOGIC ###
+  #################
+
+  '''LOOT BOX EXPLANATION:
+- each loot box is assigned a rarity value when purchased
+- loot boxes can be traded for other items or sold for flowers
+- loot boxes with higher rarity values have higher odds of dropping rare items
+
+
+reforge costs flowers
+enhancing costs scape (dismantle shitty items, except pets which can only be sold or traded)
+
+
+RARITY VALUES:
+- Legendary (1% scalar)
+- Mythic (5% scalar)
+- Rare (15% scalar)
+- Uncommon (40% scalar)
+- Common'''
+
+  async def create_loot_box(ctx: AllContext):
+    roll = random.random()
+
+    box = {
+      'source_canonical_id': ctx.user_id,
+      'source_id': ctx.source_id,
+      'timestamp': ctx.timestamp,
+      'was_subscriber': await ctx.check_sub(),
+      'name': 'Loot Box',
+      'rarity': None
+    }
+
+    if roll < 0.01:
+      box['rarity'] = 'Legendary'
+    elif roll < 0.05:
+      box['rarity'] = 'Mythic'
+    elif roll < 0.15:
+      box['rarity'] = 'Rare'
+    elif roll < 0.4:
+      box['rarity'] = 'Uncommon'
+    else:
+      box['rarity'] = 'Common'
+
+    return box
 
   weapons_summary = '''
   - Shortsword: 1
@@ -601,7 +651,7 @@ async def main():
 
   async def daily_command(ctx: AllContext):
     if ctx.user_id is None:
-      return await ctx.reply(f'This command requires a linked Discord account. Use {data[DISCORD_PREFIX_KEY]}link in Discord to link your accounts.')
+      return await reply_not_linked(ctx)
     if (await is_live()):
       timestamp_key = f'daily_ts:{ctx.user_id}'
       now = time.time()
@@ -631,13 +681,42 @@ async def main():
 
   async def bal_command(ctx: AllContext):
     if ctx.user_id is None:
-      return await ctx.reply(f'This command requires a linked Discord account. Use {data[DISCORD_PREFIX_KEY]}link in Discord to link your accounts.')
+      return await reply_not_linked(ctx)
     bal_key = f'bal:{ctx.user_id}'
     emoji = data['currency_emoji']
     await ctx.reply(f'You have {data.get(bal_key, 0)}{emoji}')
 
   async def buybox_command(ctx: AllContext):
-    pass
+    if ctx.user_id is None:
+      return await reply_not_linked(ctx)
+    bal_key = f'bal:{ctx.user_id}'
+    if (bal := data.get(bal_key, 0)) >= 50:
+      box = await create_loot_box(ctx)
+      inv_key = f'inv:{ctx.user_id}'
+      try:
+        data[inv_key].append(box)
+      except KeyError:
+        data[inv_key] = [box]
+      data[bal_key] = bal - 50
+      await data.save()
+      emoji = data['currency_emoji']
+      await ctx.reply(f'Obtained {box["rarity"]} {box["name"]}! Paid 50{emoji}')
+    else:
+      await ctx.reply('Insufficient flowers.')
+
+  async def inv_command(ctx: AllContext):
+    if ctx.user_id is None:
+      return await reply_not_linked(ctx)
+    if (inv := data.get(f'inv:{ctx.user_id}')) is None:
+      return await ctx.reply('Your inventory is empty. :(')
+    inv = (f'{i["rarity"]} {i["name"]}' for i in inv)
+    await ctx.reply(f'Inventory: {", ".join(inv)}')
+
+  async def item_command(ctx: AllContext):
+    await ctx.reply('Under construction! wait patiently..... or not idc')
+
+  async def usebox_command(ctx: AllContext):
+    await ctx.reply('Under construction! wait patiently..... or not idc')
 
   async def sub_command(ctx: AllContext):
     if await ctx.check_sub():
@@ -657,6 +736,7 @@ async def main():
     alert_command,
     tweet_command,
     status_command,
+    link_command,
     code_command,
     ddnet_command,
     discord_command,
@@ -673,7 +753,10 @@ async def main():
     daily_command,
     lb_command,
     bal_command,
-    link_command,
+    buybox_command,
+    inv_command,
+    item_command,
+    usebox_command,
     sub_command
   )
 
