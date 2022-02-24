@@ -16,7 +16,7 @@ from twitchio.errors import AuthenticationError as TwitchAuthFailure
 from twitchio.ext import commands as twitch
 
 
-VERSION='0.1.3'
+VERSION='0.1.4'
 
 load_dotenv()
 
@@ -219,6 +219,11 @@ class TwitchBot(twitch.Bot, Loggable):
       self.log_error(LOGIN_ERROR_MESSAGE)
       raise exc
 
+  async def event_command_error(self, ctx, error):
+    if isinstance(error, twitch.CommandNotFound):
+      return
+    raise error
+
   async def event_ready(self):
     self.log_done('ready')
 
@@ -240,6 +245,11 @@ class DiscordBot(discord.Bot, Loggable):
     except Exception as exc:
       self.log_error(LOGIN_ERROR_MESSAGE)
       raise exc
+
+  async def on_command_error(self, ctx, error):
+    if isinstance(error, discord.CommandNotFound):
+      return
+    raise error.original
 
   async def on_ready(self):
     self.log_done('ready')
@@ -479,9 +489,9 @@ async def main():
       key = f'info:{name}'
       if key in data:
         data[key] = ' '.join(args[1:])
-        await ctx.reply('Info for "{name}" updated!')
+        await ctx.reply(f'Info for "{name}" updated!')
       else:
-        await ctx.reply('Info for "{name}"  was not found.')
+        await ctx.reply(f'Info for "{name}"  was not found.')
 
   async def link_command(ctx: AllContext, *code):
     if ctx.source_type is discord.Context:
