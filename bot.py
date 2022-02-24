@@ -195,7 +195,7 @@ class TwitchBot(twitch.Bot, Loggable):
       initial_channels=[BROADCASTER_CHANNEL]
     )
     self.data = data
-  
+
   async def connect(self):
     self.log_info(LOGIN_ATTEMPT_MESSAGE)
     try:
@@ -259,10 +259,10 @@ async def main():
   def add_commands(*coros):
     for coro in coros:
       add_command(coro, coro.__name__.replace('_command', ''))
-  
+
   async def is_live(channel_name: str = BROADCASTER_CHANNEL):
     return bool(await twitch_bot.fetch_streams(user_logins=[channel_name]))
-  
+
   async def basic_command(ctx: AllContext, key: str, label: str, intro: str, *args, unavailable='n/a'):
     if ctx.is_mod and len(args):
       data[key] = ' '.join(args)
@@ -284,7 +284,7 @@ async def main():
         closed_voice_channel = guild.get_channel(DISCORD_CLOSED_VOICE_CHANNEL_ID)
 
         discord_bot.log_info('disabling LIVE channel for members')
-        await live_voice_channel.set_permissions(guild.default_role, view_channel=False, reason=reason)
+        await live_voice_channel.set_permissions(guild.default_role, view_channel=False, connect=False, reason=reason)
         discord_bot.log_done('disabled LIVE')
         if (num_members := len(live_voice_channel.members)):
           discord_bot.log_info(f'moving {num_members} members')
@@ -300,12 +300,131 @@ async def main():
         live_voice_channel = after.channel
 
         discord_bot.log_info('enabling LIVE channel for members')
-        await live_voice_channel.set_permissions(live_voice_channel.guild.default_role, view_channel=True)
+        await live_voice_channel.set_permissions(live_voice_channel.guild.default_role, view_channel=True, connect=False)
         discord_bot.log_done('enabled LIVE')
 
   @discord_bot.check
   async def __limit_commands_to_channels(ctx: discord.Context):
     return ctx.guild is not None and ctx.channel.id in DISCORD_CHANNEL_IDS
+
+  #####################
+  ### RPG CONSTANTS ###
+  #####################
+
+  weapons_summary = '''
+  - Shortsword: 1
+  - Javelin: 2
+  - Mace: 3
+  - Crossbow: 3 (base 10% attack speed)
+  - Magic Missle: 5 (base 10% attack speed + mana cost: 20 mana)
+  - Plasma Cannon: 5 (base 20% attack speed + base 10% electric damage)
+  - Ice Bow: 5 (base 20% attack speed + base 10% freeze damage)
+  - Poisoned Saber: 7 (base 10% poison damage)
+  - Poison Staff: 7 (base 20% poison damage + mana cost: 35 mana)
+  - Ignition Spell: 7 (base 20% burn damage + mana cost: 35 mana)
+  - Frost Bolt: 7 (base 20% freeze damage + mana cost: 35 mana)
+  - Fire Sword: 7 (base 10% burn damage)
+  - Tome of Thunder: 8 (base 10% electric damage + mana cost: 40 mana)
+  - Broadsword: 8 (base -10% attack speed)
+  - Battleaxe: 10 (base -20% attack speed)
+  - Bane of Souls: 11 (base 10% life steal + mana cost: 60 mana)'''
+
+  weapons = [
+    {'name': 'Shortsword', 'damage': 1},
+    {'name': 'Javelin', 'damage': 2},
+    {'name': 'Mace', 'damage': 3},
+    {'name': 'Crossbow', 'effect': 'rate', 'effect_value': 10, 'damage': 3},
+    {'name': 'Magic Missle', 'mana_cost': 20, 'effect': 'rate', 'effect_value': 10, 'damage': 5},
+    {'name': 'Plasma Cannon', 'effect': 'rate', 'effect_value': 20, 'effect_2': 'electric', 'effect_value_2': 10, 'damage': 5},
+    {'name': 'Ice Bow', 'effect': 'rate', 'effect_value': 20, 'effect_2': 'freeze', 'effect_value_2': 10, 'damage': 5},
+    {'name': 'Poisoned Saber', 'effect': 'poison', 'effect_value': 10, 'damage': 7},
+    {'name': 'Poison Staff', 'mana_cost': 35, 'effect': 'poison', 'effect_value': 20, 'damage': 7},
+    {'name': 'Ignition Spell', 'mana_cost': 35, 'effect': 'burn', 'effect_value': 20, 'damage': 7},
+    {'name': 'Frost Bolt', 'mana_cost': 35, 'effect': 'freeze', 'effect_value': 20, 'damage': 7},
+    {'name': 'Fire Sword', 'effect': 'burn', 'effect_value': 10, 'damage': 7},
+    {'name': 'Tome of Thunder', 'mana_cost': 40, 'effect': 'electric', 'effect_value': 10, 'damage': 8},
+    {'name': 'Broadsword', 'effect': 'rate', 'effect_value': -10, 'damage': 8},
+    {'name': 'Battleaxe', 'effect': 'rate', 'effect_value': -20, 'damage': 10},
+    {'name': 'Bane of Souls', 'effect': 'life_steal', 'effect_value': 10, 'mana_cost': 60, 'damage': 11}
+  ]
+
+  armor_summary = '''
+  - Leather: 1
+  - Iron: 2
+  - Mythril: 4
+  - Titanium: 5
+  - Spectral: 5 (20% evade chance)'''
+
+  armor = [
+    {'name': 'Leather', 'defense': 1},
+    {'name': 'Iron', 'defense': 2},
+    {'name': 'Mythril', 'defense': 4},
+    {'name': 'Titanium', 'defense': 5},
+    {'name': 'Spectral', 'effect': 'evade', 'effect_value': 20, 'defense': 5}
+  ]
+
+  pets_summary = '''
+  - Cat: 1
+  - Snake: 2
+  - Dog: 2
+  - Fairy: 2 (20% mana recovery)
+  - Wolf: 3
+  - Bear: 4
+  - Crocodile: 4
+  - Lion: 5
+  - Tiger: 6
+  - Raptor: 7 (10% poison damage)
+  - Giant: 8
+  - Golem: 9
+  - Wyvern: 10 (20% total mana)
+  - Phoenix: 11 (10% fire damage)
+  - Dragon: 12 (10% fire damage)'''
+
+  pets = [
+    {'name': 'Cat', 'damage': 1},
+    {'name': 'Snake', 'damage': 2},
+    {'name': 'Dog', 'damage': 2},
+    {'name': 'Fairy', 'effect': 'mana_rec', 'effect_value': 20, 'damage': 2},
+    {'name': 'Wolf', 'damage': 3},
+    {'name': 'Bear', 'damage': 4},
+    {'name': 'Crocodile', 'damage': 4},
+    {'name': 'Lion', 'damage': 5},
+    {'name': 'Tiger', 'damage': 6},
+    {'name': 'Raptor', 'effect': 'poison', 'effect_value': 10, 'damage': 7},
+    {'name': 'Giant', 'damage': 8},
+    {'name': 'Golem', 'damage': 9},
+    {'name': 'Wyvern', 'effect': 'mana', 'effect_value': 20, 'damage': 10},
+    {'name': 'Phoenix', 'effect': 'burn', 'effect_value': 10, 'damage': 11},
+    {'name': 'Dragon', 'effect': 'burn', 'effect_value': 20, 'damage': 12}
+  ]
+
+  gems_summary = '''
+  - Amethyst: (10% HP recovery)
+  - Garnet: (20% total HP)
+  - Sapphire: (20% mana recovery)
+  - Opal: (20% total mana)
+  - Emerald: (10% attack rate)
+  - Agate: (5% attack buff)
+  - Jade: (10% defense buff)
+  - Ruby: (10% burn damage)
+  - Tourmaline: (10% poison damage)
+  - Crystal: (10% freeze damage)
+  - Citrine: (10% electric damage)'''
+
+  gems = [
+    {'name': 'Amethyst', 'effect': 'hp_rec', 'effect_value': 10},
+    {'name': 'Garnet', 'effect': 'hp', 'effect_value': 20},
+    {'name': 'Sapphire', 'effect': 'mana_rec', 'effect_value': 20},
+    {'name': 'Opal', 'effect': 'mana', 'effect_value': 20},
+    {'name': 'Emerald', 'effect': 'rate', 'effect_value': 10},
+    {'name': 'Agate', 'effect': 'attack', 'effect_value': 5},
+    {'name': 'Jade', 'effect': 'defense', 'effect_value': 10},
+    {'name': 'Ruby', 'effect': 'burn', 'effect_value': 10},
+    {'name': 'Tourmaline', 'effect': 'poison', 'effect_value': 10},
+    {'name': 'Crystal', 'effect': 'freeze', 'effect_value': 10},
+    {'name': 'Citrine', 'effect': 'electric', 'effect_value': 10}
+  ]
+
 
   ################
   ### COMMANDS ###
