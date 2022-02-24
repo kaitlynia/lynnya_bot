@@ -135,7 +135,9 @@ class Data(dict, Loggable):
 
 
 class AllContext:
-  def __init__(self, ctx, data: Data):
+  def __init__(self, discord_bot: discord.Bot, twitch_bot: twitch.Bot, ctx, data: Data):
+    self.discord_bot = discord_bot
+    self.twitch_bot = twitch_bot
     self.source_ctx = ctx
     self.data = data
 
@@ -152,7 +154,7 @@ class AllContext:
     # context check to populate user_id
     if self.source_type is discord.Context:
       self.is_mod = ctx.author.permissions_in(ctx.bot.get_channel(DISCORD_STAFF_CHANNEL_ID)).view_channel
-      self.is_subscriber = any(role.id == DISCORD_SUBSCRIBER_ROLE_ID for role in ctx.author.roles)
+
       self.system_content = ctx.message.system_content
       self.clean_content = ctx.message.clean_content
       self.timestamp = ctx.message.created_at.timestamp()
@@ -161,14 +163,37 @@ class AllContext:
       if discord_to_twitch_key in data:
         self.user_id = data[discord_to_twitch_key]
 
+        async def check_sub():
+          # has_sub_role = any(role.id == DISCORD_SUBSCRIBER_ROLE_ID for role in ctx.author.roles)
+          # if not has_sub_role:
+          #   matched_users = await self.twitch_bot.fetch_users(ids=[self.user_id])
+          #   if len(matched_users) > 0:
+              # return matched_users[0].is_subscriber
+          # return has_sub_role
+          return any(role.id == DISCORD_SUBSCRIBER_ROLE_ID for role in ctx.author.roles)
+
+        self.check_sub = check_sub
+
+      else:
+        async def check_sub():
+          return any(role.id == DISCORD_SUBSCRIBER_ROLE_ID for role in ctx.author.roles)
+
+        self.check_sub = check_sub
+
       async def __reply(content: str):
         formatted = content.replace('/>', '>')
         await ctx.reply(formatted)
+
       self.reply = __reply
 
     elif self.source_type is twitch.Context:
       self.is_mod = ctx.author.is_mod
-      self.is_subscriber = ctx.author.is_subscriber
+
+      async def check_sub():
+        return ctx.author.is_subscriber
+
+      self.check_sub = check_sub
+
       self.system_content = ctx.message.raw_data
       self.clean_content = ctx.message.raw_data
       self.timestamp = ctx.message.timestamp.timestamp()
@@ -186,6 +211,7 @@ class AllContext:
             .split('\n')
         ))
         await ctx.reply(formatted)
+
       self.reply = __reply
 
     else:
@@ -276,11 +302,11 @@ async def main():
   def add_command(coro, name=None):
     @twitch_bot.command(name=name or coro.__name__)
     async def __twitch_command(ctx, *args):
-      await coro(AllContext(ctx, data), *args)
+      await coro(AllContext(discord_bot, twitch_bot, ctx, data), *args)
 
     @discord_bot.command(name=name or coro.__name__)
     async def __discord_command(ctx, *args):
-      await coro(AllContext(ctx, data), *args)
+      await coro(AllContext(discord_bot, twitch_bot, ctx, data), *args)
 
   def add_commands(*coros):
     for coro in coros:
@@ -579,18 +605,19 @@ async def main():
     if (await is_live()):
       timestamp_key = f'daily_ts:{ctx.user_id}'
       now = time.time()
+      subbed = await ctx.check_sub()
+
       # if 12 hours have passed since the last daily claim
       if now >= (timestamp := data.get(timestamp_key, 0)) + (60 * 60 * 12):
         data[timestamp_key] = now
-        max_reward = 100 if ctx.is_subscriber else 50
-        reward = random.randint(10, max_reward)
+        reward = random.randint(10, 100 if subbed else 50)
         bal_key = f'bal:{ctx.user_id}'
         bal = data[bal_key] = data.get(bal_key, 0) + reward
         if timestamp == 0:
           data['bal:sorted'] = list(sorted(data['bal:sorted'] + [str(ctx.user_id)], key=lambda u: data.get(f'bal:{u}', 0), reverse=True))
         await data.save()
         emoji = data['currency_emoji']
-        await ctx.reply(f'Thanks for claiming your daily! Got {reward}{emoji}, Total: {bal}{emoji}')
+        await ctx.reply(f'Thanks for claiming your daily! Got {reward}{emoji} {" (sub bonus)" if subbed else ""}, Total: {bal}{emoji}')
       else:
         await ctx.reply('You have already claimed a daily in the last 12 hours! Try again later.')
     else:
@@ -613,10 +640,16 @@ async def main():
     pass
 
   async def sub_command(ctx: AllContext):
-    if ctx.is_subscriber:
+    if await ctx.check_sub():
       await ctx.reply('uwu yes you are a sub')
     else:
       await ctx.reply('wtf why aren\'t you subbed????')
+
+  # async def test_command(ctx: AllContext):
+  #   if ctx.user_id is not None:
+  #     broadcaster_response = await ctx.twitch_bot.fetch_users(names=[BROADCASTER_CHANNEL])
+  #     if len(broadcaster_response) > 0:
+  #       print(await broadcaster_response[0].fetch_subscriptions(TWITCH_TOKEN, userids=[ctx.user_id]))
 
 
   add_commands(
