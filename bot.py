@@ -564,12 +564,8 @@ RARITY VALUES:
       if len(args) < 2:
         return await ctx.reply('Missing info message argument.')
       name = args[0]
-      key = f'info:{name}'
-      if key in data:
-        data[key] = ' '.join(args[1:])
-        await ctx.reply(f'Info for "{name}" updated!')
-      else:
-        await ctx.reply(f'Info for "{name}"  was not found.')
+      data[f'info:{name}'] = ' '.join(args[1:])
+      await ctx.reply(f'Info for "{name}" updated!')
 
   async def link_command(ctx: AllContext, *code):
     if ctx.source_type is discord.Context:
