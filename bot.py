@@ -63,6 +63,14 @@ DEFAULT_CURRENCY_EMOJI = os.getenv('DEFAULT_CURRENCY_EMOJI')
 DISCORD_PREFIX_KEY = 'prefix:discord'
 TWITCH_PREFIX_KEY = 'prefix:twitch'
 
+RARITY_COMMON = 'Common'
+RARITY_UNCOMMON = 'Uncommon'
+RARITY_RARE = 'Rare'
+RARITY_MYTHIC = 'Mythic'
+RARITY_LEGENDARY = 'Legendary'
+
+INVENTORY_TEMPLATE = 'Inventory:\n```md\n{}\n```'
+
 def print_box(message: str):
   l = len(message)
   print(
@@ -401,15 +409,15 @@ RARITY VALUES:
     }
 
     if roll < 0.01:
-      box['rarity'] = 'Legendary'
+      box['rarity'] = RARITY_LEGENDARY
     elif roll < 0.05:
-      box['rarity'] = 'Mythic'
+      box['rarity'] = RARITY_MYTHIC
     elif roll < 0.15:
-      box['rarity'] = 'Rare'
+      box['rarity'] = RARITY_RARE
     elif roll < 0.4:
-      box['rarity'] = 'Uncommon'
+      box['rarity'] = RARITY_UNCOMMON
     else:
-      box['rarity'] = 'Common'
+      box['rarity'] = RARITY_COMMON
 
     return box
 
@@ -688,7 +696,7 @@ RARITY VALUES:
     bal_key = f'bal:{ctx.user_id}'
     if (bal := data.get(bal_key, 0)) >= 50:
       box = await create_loot_box(ctx)
-      inv_key = f'inv:{ctx.user_id}'
+      inv_key = f'boxes:{ctx.user_id}'
       try:
         data[inv_key].append(box)
       except KeyError:
@@ -700,13 +708,34 @@ RARITY VALUES:
     else:
       await ctx.reply('Insufficient flowers.')
 
+  async def boxes_command(ctx: AllContext):
+    if ctx.user_id is None:
+      return await reply_not_linked(ctx)
+    if (boxes := data.get(f'boxes:{ctx.user_id}')) is None:
+      return await ctx.reply('Your inventory is empty. :(')
+
+    quantities = {
+      RARITY_COMMON: 0,
+      RARITY_UNCOMMON: 0,
+      RARITY_RARE: 0,
+      RARITY_MYTHIC: 0,
+      RARITY_LEGENDARY: 0
+    }
+
+    for box in boxes:
+      quantities[box['rarity']] += 1
+
+    boxes_str = '\n'.join(f'{rarity} ({quantity})' for rarity, quantity in quantities.items() if quantity)
+    await ctx.reply(f'Loot boxes: {boxes_str}')
+
   async def inv_command(ctx: AllContext):
     if ctx.user_id is None:
       return await reply_not_linked(ctx)
-    if (inv := data.get(f'inv:{ctx.user_id}')) is None:
+    if (items := data.get(f'inv:{ctx.user_id}')) is None:
       return await ctx.reply('Your inventory is empty. :(')
-    inv = (f'{i["rarity"]} {i["name"]}' for i in inv)
-    await ctx.reply(f'Inventory: {", ".join(inv)}')
+
+    items = (f'{x}. {item["rarity"]} {item["name"]}' for x, item in enumerate(items, 0))
+    await ctx.reply(INVENTORY_TEMPLATE.format('\n'.join(items)))
 
   async def item_command(ctx: AllContext):
     await ctx.reply('Under construction! wait patiently..... or not idc')
@@ -750,6 +779,7 @@ RARITY VALUES:
     lb_command,
     bal_command,
     buybox_command,
+    boxes_command,
     inv_command,
     item_command,
     usebox_command,
