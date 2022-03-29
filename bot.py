@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import random
+import re
 import time
 
 from aiofiles import open as aiopen
@@ -10,9 +11,9 @@ from discord.errors import LoginFailure as DiscordAuthFailure
 from discord.ext import commands as discord
 from dotenv import load_dotenv
 from peony import PeonyClient
+from twitchio import Message as TwitchMessage
 from twitchio.errors import AuthenticationError as TwitchAuthFailure
 from twitchio.ext import commands as twitch
-
 
 VERSION='0.1.4'
 
@@ -71,6 +72,13 @@ RARITY_LEGENDARY = 'Legendary'
 
 INVENTORY_TEMPLATE = 'Inventory:\n```md\n{}\n```'
 
+EMOTE_VALUE_EXPONENT = 0.5
+PARTIAL_BAL_PER_BAL = 10
+
+# load English word list TODO: extend this to include common tokens used in chats (uwu, IRL, etc.)
+with open('words.txt') as f:
+  ENGLISH_WORDS = set(f.read().lower().split())
+
 def print_box(message: str):
   l = len(message)
   print(
@@ -79,6 +87,22 @@ def print_box(message: str):
     '┗━' + '━' * l + '━┛',
     sep='\n'
   )
+
+# levenshtein distance function. used to determine word values for chatter rewards
+# source: https://devrescue.com/levenshtein-distance-in-python
+def leven(x, y):
+  n = len(x)
+  m = len(y)
+  A = [[i + j for j in range(m + 1)] for i in range(n + 1)]
+
+  for i in range(n):
+    for j in range(m):
+      A[i + 1][j + 1] = min(
+        A[i][j + 1] + 1,              # insert
+        A[i + 1][j] + 1,              # delete
+        A[i][j] + int(x[i] != y[j])   # replace
+      )
+  return A[n][m]
 
 def log(prefix: str, origin: str, *info: str):
   print(f'{prefix} {origin}{" " * max(1, LOG_COLUMN_WIDTH - len(origin))}{"".join(info)}')
@@ -313,17 +337,17 @@ async def main():
   )
 
   def add_command(coro, name=None):
-    @twitch_bot.command(name=name or coro.__name__)
+    @twitch_bot.command(name=name or coro.__name__.replace('_command', ''))
     async def __twitch_command(ctx, *args):
       await coro(AllContext(discord_bot, twitch_bot, ctx, data), *args)
 
-    @discord_bot.command(name=name or coro.__name__)
+    @discord_bot.command(name=name or coro.__name__.replace('_command', ''))
     async def __discord_command(ctx, *args):
       await coro(AllContext(discord_bot, twitch_bot, ctx, data), *args)
 
   def add_commands(*coros):
     for coro in coros:
-      add_command(coro, coro.__name__.replace('_command', ''))
+      add_command(coro)
 
   async def is_live(channel_name: str = BROADCASTER_CHANNEL):
     return bool(await twitch_bot.fetch_streams(user_logins=[channel_name]))
@@ -374,6 +398,60 @@ async def main():
   @discord_bot.check
   async def __limit_commands_to_channels(ctx: discord.Context):
     return ctx.guild is not None and ctx.channel.id in DISCORD_CHANNEL_IDS
+
+  # on message, do chatter-based logic here
+  @twitch_bot.event()
+  async def event_message(message: TwitchMessage):
+    if message.author is None or message.author.name == twitch_bot.nick or not await is_live(): return
+
+    # everything after "emotes="
+    emote_pre = message.raw_data.split('emotes=', 1)[-1]
+    # ... everything after the message head
+    tokens_str = emote_pre.split(' PRIVMSG ')[-1].split(':')[-1]
+    # ... and everything before the emote value delimiter (;)
+    emote_blob = emote_pre.split(';', 1)[0]
+    num_emotes = 0
+    unique_emotes = []
+
+    if emote_blob:
+      # for emote type in list of unique emotes used
+      for emote_type in emote_blob.split('/'):
+        # find all the ranges the emote was used in
+        ranges_used = emote_type.split(':')[-1].split(',')
+        # +1 for each range
+        num_emotes += len(ranges_used)
+        # use the first available range to record the emote's name for removal later
+        start, stop = map(int, ranges_used[0].split('-'))
+        unique_emotes.append(tokens_str[start : stop + 1])
+
+    # remove emotes
+    for emote in unique_emotes:
+      tokens_str.replace(emote, '')
+
+    # remove symbols, remove capitals, then tokenize
+    tokens = re.sub(r'[^\w+]', ' ', tokens_str).lower().split()
+
+    # remove duplicate tokens, then remove tokens that are not known to be English words
+    words = list(t for t in set(tokens) if t in ENGLISH_WORDS)
+    num_words = len(words)
+
+    # find the average of averages for each word's levenshtein distances to other words in the message
+    # NOTE: this is a SOMEWHAT accurate way of determining valuable/conversational messages, but it is not ideal
+    words_score = sum(sum(leven(word, w) for w in words) / num_words for word in words) / num_words if num_words else 0
+
+    # calculate total score with the emote score combined
+    total_score = int(words_score + num_emotes ** EMOTE_VALUE_EXPONENT)
+
+    partial_bal_key = f'partial_bal:{message.author.id}'
+    partial_bal = data[partial_bal_key] = data.get(partial_bal_key, 0) + total_score
+
+    if partial_bal >= PARTIAL_BAL_PER_BAL:
+      data[partial_bal_key] = partial_bal - PARTIAL_BAL_PER_BAL
+      bal_key = f'bal:{message.author.id}'
+      data[bal_key] = data.get(bal_key, 0) + 1
+
+    await data.save()
+
 
   #################
   ### RPG LOGIC ###
@@ -605,7 +683,7 @@ RARITY VALUES:
       else:
         await ctx.reply(f'Missing code argument. Use {data[DISCORD_PREFIX_KEY]}link in Discord to link your accounts.')
 
-  async def status_command(ctx: AllContext):
+  async def status_command(ctx: AllContext, *args):
     twitch_channel = await twitch_bot.fetch_channel(BROADCASTER_CHANNEL)
     online = await is_live()
     status = '**Online**' if online else 'Offline'
@@ -616,7 +694,7 @@ RARITY VALUES:
 **Game:** ({twitch_channel.game_name})
 **Stream:** {stream_link_embedded}''')
 
-  async def alert_command(ctx: AllContext):
+  async def alert_command(ctx: AllContext, *args):
     if ctx.is_mod:
       twitch_channel = await twitch_bot.fetch_channel(BROADCASTER_CHANNEL)
       alerts_channel = discord_bot.get_channel(DISCORD_ALERTS_CHANNEL_ID)
@@ -646,14 +724,14 @@ RARITY VALUES:
         BROADCASTER_CHANNEL
       ))
 
-  async def tweet_command(ctx: AllContext):
+  async def tweet_command(ctx: AllContext, *args):
     raw = ctx.system_content.split('```')[1:-1]
     if ctx.is_mod and len(raw):
       status = raw[0].split('\n', 1)[-1]
       response = await twitter_bot.api.statuses.update.post(status=status)
       await ctx.reply('Sent tweet!')
 
-  async def daily_command(ctx: AllContext):
+  async def daily_command(ctx: AllContext, *args):
     if ctx.user_id is None:
       return await reply_not_linked(ctx)
     if (await is_live()):
@@ -677,20 +755,20 @@ RARITY VALUES:
     else:
       await ctx.reply(f'Since {BROADCASTER_CHANNEL} is not live, the daily command cannot be used.')
 
-  async def lb_command(ctx: AllContext):
+  async def lb_command(ctx: AllContext, *args):
     channels = await asyncio.gather(*(twitch_bot.fetch_channel(i) for i in data.get('bal:sorted', [])[:10]))
     names = (c.user.name for c in channels)
     result = ', '.join(f'{i}. {n}' for i, n in enumerate(names, start=1))
     await ctx.reply(f'{data.get("currency_emoji")} leaderboard: {result}')
 
-  async def bal_command(ctx: AllContext):
+  async def bal_command(ctx: AllContext, *args):
     if ctx.user_id is None:
       return await reply_not_linked(ctx)
     bal_key = f'bal:{ctx.user_id}'
     emoji = data['currency_emoji']
     await ctx.reply(f'You have {data.get(bal_key, 0)}{emoji}')
 
-  async def buybox_command(ctx: AllContext):
+  async def buybox_command(ctx: AllContext, *args):
     if ctx.user_id is None:
       return await reply_not_linked(ctx)
     bal_key = f'bal:{ctx.user_id}'
@@ -708,7 +786,7 @@ RARITY VALUES:
     else:
       await ctx.reply('Insufficient flowers.')
 
-  async def boxes_command(ctx: AllContext):
+  async def boxes_command(ctx: AllContext, *args):
     if ctx.user_id is None:
       return await reply_not_linked(ctx)
     if (boxes := data.get(f'boxes:{ctx.user_id}')) is None:
@@ -728,7 +806,7 @@ RARITY VALUES:
     boxes_str = '\n'.join(f'{rarity} ({quantity})' for rarity, quantity in quantities.items() if quantity)
     await ctx.reply(f'Loot boxes: {boxes_str}')
 
-  async def inv_command(ctx: AllContext):
+  async def inv_command(ctx: AllContext, *args):
     if ctx.user_id is None:
       return await reply_not_linked(ctx)
     if (items := data.get(f'inv:{ctx.user_id}')) is None:
@@ -737,19 +815,19 @@ RARITY VALUES:
     items = (f'{x}. {item["rarity"]} {item["name"]}' for x, item in enumerate(items, 0))
     await ctx.reply(INVENTORY_TEMPLATE.format('\n'.join(items)))
 
-  async def item_command(ctx: AllContext):
+  async def item_command(ctx: AllContext, *args):
     await ctx.reply('Under construction! wait patiently..... or not idc')
 
-  async def usebox_command(ctx: AllContext):
+  async def usebox_command(ctx: AllContext, *args):
     await ctx.reply('Under construction! wait patiently..... or not idc')
 
-  async def sub_command(ctx: AllContext):
+  async def sub_command(ctx: AllContext, *args):
     if await ctx.check_sub():
       await ctx.reply('uwu yes you are a sub')
     else:
       await ctx.reply('wtf why aren\'t you subbed????')
 
-  # async def test_command(ctx: AllContext):
+  # async def test_command(ctx: AllContext, *args):
   #   if ctx.user_id is not None:
   #     broadcaster_response = await ctx.twitch_bot.fetch_users(names=[BROADCASTER_CHANNEL])
   #     if len(broadcaster_response) > 0:
