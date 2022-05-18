@@ -3,9 +3,10 @@ import json
 import random
 import re
 import time
+from tkinter import FALSE
 
 from aiofiles import open as aiopen
-from discord import Reaction as DiscordReaction
+from discord import RawReactionActionEvent as DiscordRawReactionActionEvent
 from discord import User as DiscordUser
 from discord.ext import commands as discord
 from peony import PeonyClient as TwitterBot
@@ -131,20 +132,45 @@ async def main():
         await live_voice_channel.set_permissions(live_voice_channel.guild.default_role, view_channel=True, connect=False, reason=reason)
         discord_bot.log_done('enabled LIVE channel')
 
-  async def handle_reaction(reaction: DiscordReaction, user: DiscordUser, add: bool):
-    discord_bot.log_info(f'{"added" if add else "removed"} {reaction.emoji}')
-    # if reaction.message.channel.id == constants.DISCORD_REACTION_ROLES_CHANNEL_ID:
-    #   print(f'{"added" if add else "removed"} {reaction.emoji}')
-    # CSGO = discord.utils.get(user.server.roles, name="CSGO_P")
-    # await discord_bot.add_roles(user, CSGO)
+  async def handle_reaction(reaction: DiscordRawReactionActionEvent):
+    # TODO: add logging
+    if reaction.channel_id == constants.DISCORD_REACTION_ROLES_CHANNEL_ID:
+      role = None
+
+      if reaction.event_type == 'REACTION_ADD':
+        member = reaction.member
+      else:
+        member = await (discord_bot.get_guild(reaction.guild_id)).fetch_member(reaction.user_id)
+
+      if reaction.emoji.name == constants.DISCORD_REACTION_ROLES_ALERTS_EMOJI:
+        role = member.guild.get_role(constants.DISCORD_ALERTS_ROLE_ID)
+      elif reaction.emoji.name == constants.DISCORD_REACTION_ROLES_RESCUE_EMOJI:
+        role = member.guild.get_role(constants.DISCORD_TIMER_ALERTS_ROLE_ID)
+      elif reaction.event_type == 'REACTION_ADD':
+        await (
+          await (
+            discord_bot.get_channel(reaction.channel_id)
+          ).fetch_message(reaction.message_id)
+        ).remove_reaction(reaction.emoji, member)
+
+      if role is not None:
+        if reaction.event_type == 'REACTION_ADD':
+          await member.add_roles(role)
+        else:
+          await member.remove_roles(role)
 
   @discord_bot.event
-  async def on_reaction_add(reaction: DiscordReaction, user: DiscordUser):
-    await handle_reaction(reaction, user, True)
+  async def on_member_join(member):
+    # TODO: add logging
+    await member.add_roles(member.guild.get_role(constants.DISCORD_ALERTS_ROLE_ID))
 
   @discord_bot.event
-  async def on_reaction_remove(reaction: DiscordReaction, user: DiscordUser):
-    await handle_reaction(reaction, user, False)
+  async def on_raw_reaction_add(payload):
+    await handle_reaction(payload)
+
+  @discord_bot.event
+  async def on_raw_reaction_remove(payload):
+    await handle_reaction(payload)
 
   @discord_bot.check
   async def __limit_commands_to_channels(ctx: discord.Context):
@@ -534,7 +560,7 @@ async def main():
         if not sent_timer_alert:
           discord_bot.log_info('sending subathon alert')
           await alerts_channel.send(constants.SUBATHON_TIMER_ALERT_FORMAT.format(
-            constants.SUBATHON_TIMER_ALERTS_ROLE_ID,
+            constants.DISCORD_TIMER_ALERTS_ROLE_ID,
             constants.BROADCASTER_CHANNEL
           ))
           sent_timer_alert = True

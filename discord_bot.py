@@ -15,6 +15,7 @@ class DiscordBot(Bot, Loggable):
   def __init__(self, data: BotData):
     intents = Intents.default()
     intents.members = True
+    intents.reactions = True
     super().__init__(command_prefix=data[constants.DISCORD_PREFIX_KEY], intents=intents)
     self.data = data
 
