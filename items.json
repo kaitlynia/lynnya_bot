@@ -1,0 +1,134 @@
+[
+  {
+    "name": "Stone Sword",
+    "slot": "melee",
+    "base_stat": 1,
+    "stat_type": "melee damage"
+  },
+  {
+    "name": "Iron Sword",
+    "slot": "melee",
+    "base_stat": 2,
+    "stat_type": "melee damage"
+  },
+  {
+    "name": "Titanium Sword",
+    "slot": "melee",
+    "base_stat": 3,
+    "stat_type": "melee damage"
+  },
+  {
+    "name": "Steel Sword",
+    "slot": "melee",
+    "base_stat": 4,
+    "stat_type": "melee damage"
+  },
+  {
+    "name": "Carbon Sword",
+    "slot": "melee",
+    "base_stat": 5,
+    "stat_type": "melee damage"
+  },
+  {
+    "name": "Cloth Armor",
+    "slot": "armor",
+    "base_stat": 1,
+    "stat_type": "defense"
+  },
+  {
+    "name": "Leather Armor",
+    "slot": "armor",
+    "base_stat": 2,
+    "stat_type": "defense"
+  },
+  {
+    "name": "Scale Armor",
+    "slot": "armor",
+    "base_stat": 3,
+    "stat_type": "defense"
+  },
+  {
+    "name": "Chainmail Armor",
+    "slot": "armor",
+    "base_stat": 4,
+    "stat_type": "defense"
+  },
+  {
+    "name": "Plate Armor",
+    "slot": "armor",
+    "base_stat": 5,
+    "stat_type": "defense"
+  },
+  {
+    "name": "Garnet Ring",
+    "slot": "ring",
+    "base_stat": 10,
+    "stat_type": "health"
+  },
+  {
+    "name": "Amethyst Ring",
+    "slot": "ring",
+    "base_stat": 10,
+    "stat_type": "mana"
+  },
+  {
+    "name": "Ruby Ring",
+    "slot": "ring",
+    "base_stat": 1,
+    "stat_type": "health recovery"
+  },
+  {
+    "name": "Sapphire Ring",
+    "slot": "ring",
+    "base_stat": 1,
+    "stat_type": "mana recovery"
+  },
+  {
+    "name": "Emerald Ring",
+    "slot": "ring",
+    "base_stat": 1,
+    "stat_type": "attack"
+  },
+  {
+    "name": "Topaz Ring",
+    "slot": "ring",
+    "base_stat": 1,
+    "stat_type": "critical hit rate"
+  },
+  {
+    "name": "Quartz Ring",
+    "slot": "ring",
+    "base_stat": 1,
+    "stat_type": "defense"
+  },
+  {
+    "name": "Poison Staff",
+    "slot": "magic",
+    "base_stat": 1,
+    "stat_type": "poison damage"
+  },
+  {
+    "name": "Lightning Staff",
+    "slot": "magic",
+    "base_stat": 1,
+    "stat_type": "paralysis chance"
+  },
+  {
+    "name": "Magic Missile",
+    "slot": "magic",
+    "base_stat": 1,
+    "stat_type": "magic damage"
+  },
+  {
+    "name": "Fire Blast",
+    "slot": "magic",
+    "base_stat": 1,
+    "stat_type": "fire damage"
+  },
+  {
+    "name": "Vitality Spell",
+    "slot": "magic",
+    "base_stat": 1,
+    "stat_type": "health recovery"
+  }
+]
