@@ -74,3 +74,13 @@ RARITY_STATS = {
 }
 
 INVENTORY_TEMPLATE = 'Inventory:\n```md\n{}\n```'
+
+SUBATHON_TIMER_FILE = getenv('SUBATHON_TIMER_FILE')
+SUBATHON_TIMER_ALERTS_ROLE_ID = getenv('SUBATHON_TIMER_ALERTS_ROLE_ID')
+# in seconds
+SUBATHON_TIMER_ALERT_TIMEOUT = int(getenv('SUBATHON_TIMER_ALERT_TIMEOUT'))
+# in minutes
+SUBATHON_TIMER_ALERT_THRESHOLD = int(getenv('SUBATHON_TIMER_ALERT_THRESHOLD'))
+SUBATHON_TIMER_ALERT_FORMAT = '<@&{}>\n\nThe subathon could end in less than **' + str(SUBATHON_TIMER_ALERT_THRESHOLD) + ' minutes!** Donate, cheer, or gift subs to protect the subathon!\n\nhttps://twitch.tv/{}'
+
+DISCORD_REACTION_ROLES_CHANNEL_ID = int(getenv('DISCORD_REACTION_ROLES_CHANNEL_ID'))

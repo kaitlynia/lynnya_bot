@@ -1,3 +1,4 @@
+from discord import Intents
 from discord.errors import LoginFailure
 from discord.ext.commands import Bot
 from discord.ext.commands import CommandNotFound
@@ -12,7 +13,7 @@ class DiscordBot(Bot, Loggable):
   log_as = constants.LOG_DISCORD_AS
 
   def __init__(self, data: BotData):
-    super().__init__(command_prefix=data[constants.DISCORD_PREFIX_KEY])
+    super().__init__(command_prefix=data[constants.DISCORD_PREFIX_KEY], intents=Intents().all())
     self.data = data
 
   async def login(self, token: str):

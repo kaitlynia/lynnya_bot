@@ -4,6 +4,9 @@ import random
 import re
 import time
 
+from aiofiles import open as aiopen
+from discord import Reaction as DiscordReaction
+from discord import User as DiscordUser
 from discord.ext import commands as discord
 from peony import PeonyClient as TwitterBot
 from twitchio import Message as TwitchMessage
@@ -13,7 +16,6 @@ VERSION='0.2.0'
 
 import constants
 import util
-
 from bot_data import BotData
 from context import Context
 from discord_bot import DiscordBot
@@ -110,8 +112,8 @@ async def main():
         closed_voice_channel = guild.get_channel(constants.DISCORD_CLOSED_VOICE_CHANNEL_ID)
 
         discord_bot.log_info('disabling LIVE channel for members')
-        await live_voice_channel.set_permissions(guild.default_role, view_channel=False, connect=False, reason=reason)
-        discord_bot.log_done('disabled LIVE')
+        await live_voice_channel.set_permissions(live_voice_channel.guild.default_role, view_channel=False, connect=False, reason=reason)
+        discord_bot.log_done('disabled LIVE channel')
         if (num_members := len(live_voice_channel.members)):
           discord_bot.log_info(f'moving {num_members} members')
           move_gen = (m.move_to(closed_voice_channel, reason=reason) for m in live_voice_channel.members)
@@ -126,8 +128,23 @@ async def main():
         live_voice_channel = after.channel
 
         discord_bot.log_info('enabling LIVE channel for members')
-        await live_voice_channel.set_permissions(live_voice_channel.guild.default_role, view_channel=True, connect=False)
-        discord_bot.log_done('enabled LIVE')
+        await live_voice_channel.set_permissions(live_voice_channel.guild.default_role, view_channel=True, connect=False, reason=reason)
+        discord_bot.log_done('enabled LIVE channel')
+
+  async def handle_reaction(reaction: DiscordReaction, user: DiscordUser, add: bool):
+    discord_bot.log_info(f'{"added" if add else "removed"} {reaction.emoji}')
+    # if reaction.message.channel.id == constants.DISCORD_REACTION_ROLES_CHANNEL_ID:
+    #   print(f'{"added" if add else "removed"} {reaction.emoji}')
+    # CSGO = discord.utils.get(user.server.roles, name="CSGO_P")
+    # await discord_bot.add_roles(user, CSGO)
+
+  @discord_bot.event
+  async def on_reaction_add(reaction: DiscordReaction, user: DiscordUser):
+    await handle_reaction(reaction, user, True)
+
+  @discord_bot.event
+  async def on_reaction_remove(reaction: DiscordReaction, user: DiscordUser):
+    await handle_reaction(reaction, user, False)
 
   @discord_bot.check
   async def __limit_commands_to_channels(ctx: discord.Context):
@@ -502,7 +519,28 @@ async def main():
     sub_command
   )
 
+  async def subathon_task():
+    await discord_bot.wait_until_ready()
+
+    alerts_channel = discord_bot.get_channel(constants.DISCORD_ALERTS_CHANNEL_ID)
+    sent_timer_alert = False
+
+    while discord_bot.is_ready():
+      async with aiopen(constants.SUBATHON_TIMER_FILE) as aiof:
+        hours, minutes, __seconds = map(int, (await aiof.read()).split(':'))
+      if hours * 60 + minutes < constants.SUBATHON_TIMER_ALERT_THRESHOLD:
+        if not sent_timer_alert:
+          await alerts_channel.send(constants.SUBATHON_TIMER_ALERT_FORMAT.format(
+            constants.SUBATHON_TIMER_ALERTS_ROLE_ID,
+            constants.BROADCASTER_CHANNEL
+          ))
+          sent_timer_alert = True
+      else:
+        sent_timer_alert = False
+      await asyncio.sleep(constants.SUBATHON_TIMER_ALERT_TIMEOUT)
+
   await discord_bot.login(constants.DISCORD_TOKEN)
+  asyncio.create_task(subathon_task())
   asyncio.create_task(petal_bot.login())
   await asyncio.gather(*(bot.connect() for bot in [twitch_bot, discord_bot]))
 
