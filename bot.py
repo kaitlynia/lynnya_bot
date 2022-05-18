@@ -253,7 +253,7 @@ async def main():
           del data[f'link_code:{data[link_for_key]}']
         data[link_for_key] = code
         await data.save()
-        await (await discord_bot.fetch_user(ctx.source_id)).send(f'Use `{data["prefix:twitch"]}link {code}` in Twitch chat (<https://twitch.tv/{BROADCASTER_CHANNEL}/>) to link your account.')
+        await (await discord_bot.fetch_user(ctx.source_id)).send(f'Use `{data["prefix:twitch"]}link {code}` in Twitch chat (<https://twitch.tv/{constants.BROADCASTER_CHANNEL}/>) to link your account.')
         await ctx.reply('A link code has been sent to you in a direct message.')
     elif ctx.source_type is twitch.Context:
       if len(code):
