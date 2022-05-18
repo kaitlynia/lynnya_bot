@@ -13,7 +13,7 @@ from peony import PeonyClient as TwitterBot
 from twitchio import Message as TwitchMessage
 from twitchio.ext import commands as twitch
 
-VERSION='0.2.1'
+VERSION='0.2.2'
 
 import constants
 import util
