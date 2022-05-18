@@ -13,7 +13,9 @@ class DiscordBot(Bot, Loggable):
   log_as = constants.LOG_DISCORD_AS
 
   def __init__(self, data: BotData):
-    super().__init__(command_prefix=data[constants.DISCORD_PREFIX_KEY], intents=Intents().all())
+    intents = Intents.default()
+    intents.members = True
+    super().__init__(command_prefix=data[constants.DISCORD_PREFIX_KEY], intents=intents)
     self.data = data
 
   async def login(self, token: str):

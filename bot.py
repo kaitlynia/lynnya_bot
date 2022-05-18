@@ -12,7 +12,7 @@ from peony import PeonyClient as TwitterBot
 from twitchio import Message as TwitchMessage
 from twitchio.ext import commands as twitch
 
-VERSION='0.2.0'
+VERSION='0.2.1'
 
 import constants
 import util
@@ -539,8 +539,31 @@ async def main():
         sent_timer_alert = False
       await asyncio.sleep(constants.SUBATHON_TIMER_ALERT_TIMEOUT)
 
+  async def live_indicator_task():
+    await discord_bot.wait_until_ready()
+
+    live_voice_channel = discord_bot.get_channel(constants.DISCORD_LIVE_VOICE_CHANNEL_ID)
+    live_indicator_active = False
+
+    while discord_bot.is_ready():
+      if await is_live():
+        if not live_indicator_active:
+          await twitter_bot.api.account.update_profile.post(
+            name=constants.TWITTER_LIVE_DISPLAY_NAME
+          )
+          await live_voice_channel.guild.edit(name=constants.DISCORD_LIVE_GUILD_NAME)
+          live_indicator_active = True
+      elif live_indicator_active:
+        await twitter_bot.api.account.update_profile.post(
+          name=constants.TWITTER_DISPLAY_NAME
+        )
+        await live_voice_channel.guild.edit(name=constants.DISCORD_GUILD_NAME)
+        live_indicator_active = False
+      await asyncio.sleep(constants.LIVE_INDICATOR_TIMEOUT)
+
   await discord_bot.login(constants.DISCORD_TOKEN)
   asyncio.create_task(subathon_task())
+  asyncio.create_task(live_indicator_task())
   asyncio.create_task(petal_bot.login())
   await asyncio.gather(*(bot.connect() for bot in [twitch_bot, discord_bot]))
 
