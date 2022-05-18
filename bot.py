@@ -97,7 +97,7 @@ async def main():
       bal_key = f'bal:{message.author.id}'
       data[bal_key] = data.get(bal_key, 0) + 1
 
-    await data.save()
+    await data.save('chat currency award')
 
   @discord_bot.event
   async def on_voice_state_update(member, before, after):
@@ -172,7 +172,7 @@ async def main():
   async def basic_command(ctx: Context, key: str, label: str, intro: str, *args, unavailable='n/a'):
     if ctx.is_mod and len(args):
       data[key] = ' '.join(args)
-      await data.save()
+      await data.save('basic command edited')
       await ctx.reply(f'{label} updated!')
     else:
       await ctx.reply(f'{intro}{data.get(key, unavailable)}')
@@ -269,7 +269,7 @@ async def main():
         if link_for_key in data:
           del data[f'link_code:{data[link_for_key]}']
         data[link_for_key] = code
-        await data.save()
+        await data.save('link code generated')
         await (await discord_bot.fetch_user(ctx.source_id)).send(f'Use `{data["prefix:twitch"]}link {code}` in Twitch chat (<https://twitch.tv/{constants.BROADCASTER_CHANNEL}/>) to link your account.')
         await ctx.reply('A link code has been sent to you in a direct message.')
     elif ctx.source_type is twitch.Context:
@@ -280,7 +280,7 @@ async def main():
           data[f'discord:{discord_id}'] = ctx.source_id
           del data[f'link_for:{discord_id}']
           del data[link_key]
-          await data.save()
+          await data.save('link code used')
           await ctx.reply('Your Discord account was successfully linked!')
         except KeyError:
           await ctx.reply('Invalid code.')
@@ -299,6 +299,7 @@ async def main():
 **Stream:** {stream_link_embedded}''')
 
   async def alert_command(ctx: Context, *args):
+    # TODO: add logging
     if ctx.is_mod:
       twitch_channel = await twitch_bot.fetch_channel(constants.BROADCASTER_CHANNEL)
       alerts_channel = discord_bot.get_channel(constants.DISCORD_ALERTS_CHANNEL_ID)
@@ -317,6 +318,7 @@ async def main():
       ))
 
   async def tweet_command(ctx: Context, *args):
+    # TODO: add logging
     raw = ctx.system_content.split('```')[1:-1]
     if ctx.is_mod and len(raw):
       status = raw[0].split('\n', 1)[-1]
@@ -339,7 +341,7 @@ async def main():
         bal = data[bal_key] = data.get(bal_key, 0) + reward
         if timestamp == 0:
           data['bal:sorted'] = list(sorted(data['bal:sorted'] + [str(ctx.user_id)], key=lambda u: data.get(f'bal:{u}', 0), reverse=True))
-        await data.save()
+        await data.save('daily claimed')
         emoji = data['currency_emoji']
         await ctx.reply(f'Thanks for claiming your daily! Got {reward}{emoji} {" (sub bonus)" if subbed else ""}, Total: {bal}{emoji}')
       else:
@@ -391,7 +393,7 @@ async def main():
         data[boxes_key].append(boxes[-1])
 
       data[bal_key] = bal - (50 * quantity)
-      await data.save()
+      await data.save('box purchased')
       emoji = data['currency_emoji']
 
       quantities = {
@@ -477,7 +479,7 @@ async def main():
   #     data[inv_key] += [*items]
   #   except KeyError:
   #     data[inv_key] = [*items]
-  #   data.save()
+  #   data.save('box opened')
 
   #   items_str = '\n' + '\n'.join(f'{item["rarity"]} {item["name"]} [+{item["rarity_stat"]} {item["stat_type"]}]' for item in items) + '\n\n'
 
@@ -530,16 +532,19 @@ async def main():
         hours, minutes, __seconds = map(int, (await aiof.read()).split(':'))
       if hours * 60 + minutes < constants.SUBATHON_TIMER_ALERT_THRESHOLD:
         if not sent_timer_alert:
+          discord_bot.log_info('sending subathon alert')
           await alerts_channel.send(constants.SUBATHON_TIMER_ALERT_FORMAT.format(
             constants.SUBATHON_TIMER_ALERTS_ROLE_ID,
             constants.BROADCASTER_CHANNEL
           ))
           sent_timer_alert = True
+          discord_bot.log_info('subathon alert sent')
       else:
         sent_timer_alert = False
       await asyncio.sleep(constants.SUBATHON_TIMER_ALERT_TIMEOUT)
 
   async def live_indicator_task():
+    # TODO: add logging
     await discord_bot.wait_until_ready()
 
     live_voice_channel = discord_bot.get_channel(constants.DISCORD_LIVE_VOICE_CHANNEL_ID)

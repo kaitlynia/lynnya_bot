@@ -43,8 +43,8 @@ class BotData(dict, Loggable):
       self.log_error('an unexpected error occurred while loading data:')
       raise exc
 
-  async def save(self):
-    self.log_info('saving data')
+  async def save(self, reason=None):
+    self.log_info(f'saving data ({reason if reason else "unspecified reason"})')
 
     async with aiopen(self.path) as aiof:
       backup = await self.__read_dict_from_file(aiof)
