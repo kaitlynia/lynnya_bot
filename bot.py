@@ -293,14 +293,7 @@ async def main():
         constants.BROADCASTER_CHANNEL
       ))
 
-      response = await twitter_bot.api.statuses.update.post(status=constants.TWITTER_ALERT_FORMAT.format(
-        twitch_channel.title,
-        twitch_channel.game_name,
-        constants.BROADCASTER_CHANNEL
-      ))
-
-      await ctx.reply('**Created alert:**\n\n' + constants.DISCORD_ALERT_FORMAT.format(
-        'role_id_removed',
+      await twitter_bot.api.statuses.update.post(status=constants.TWITTER_ALERT_FORMAT.format(
         twitch_channel.title,
         twitch_channel.game_name,
         constants.BROADCASTER_CHANNEL
