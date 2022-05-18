@@ -1,6 +1,7 @@
 /data.json
 /data.json.bak
 /todo.txt
+/clock.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
