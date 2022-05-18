@@ -22,7 +22,7 @@ class DiscordBot(Bot, Loggable):
     self.log_info(constants.LOGIN_ATTEMPT_MESSAGE)
     try:
       await super().login(token)
-      self.log_done(constants.LOGIN_SUCCESS_MESSAGE)
+      self.log_info(constants.LOGIN_SUCCESS_MESSAGE)
     except LoginFailure:
       self.log_error(constants.LOGIN_AUTH_ERROR_MESSAGE)
     except Exception as exc:
