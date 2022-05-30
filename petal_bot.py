@@ -31,7 +31,7 @@ class PetalBot:
     await self.send(type = 'auth-token', name = self.name, token = self.token)
 
     async def event_message(message):
-      if (message.echo or not message.content or message.content.startswith('[twitch] ')): return
+      if (message.echo or not message.content): return
       await self.ws.send(json.dumps({
         'type': 'message',
         'body': f'[twitch] {message.author.name}: {message.content}'
@@ -39,8 +39,7 @@ class PetalBot:
     self.twitch_bot.event_message = event_message
 
     async def on_message(message):
-      if message.channel.id != constants.DISCORD_BRIDGE_CHANNEL_ID or\
-        message.author.bot or not message.clean_content or message.clean_content.startswith('[discord] '):
+      if message.channel.id != constants.DISCORD_BRIDGE_CHANNEL_ID or message.author.bot or not message.clean_content:
         return
       await self.ws.send(json.dumps({
         'type': 'message',
