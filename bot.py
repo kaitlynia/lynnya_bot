@@ -3,17 +3,15 @@ import json
 import random
 import re
 import time
-from tkinter import FALSE
 
 from aiofiles import open as aiopen
 from discord import RawReactionActionEvent as DiscordRawReactionActionEvent
-from discord import User as DiscordUser
 from discord.ext import commands as discord
 from peony import PeonyClient as TwitterBot
 from twitchio import Message as TwitchMessage
 from twitchio.ext import commands as twitch
 
-VERSION='0.2.2'
+VERSION='0.2.3'
 
 import constants
 import util
@@ -555,19 +553,22 @@ async def main():
 
     while discord_bot.is_ready():
       async with aiopen(constants.SUBATHON_TIMER_FILE) as aiof:
-        hours, minutes, __seconds = map(int, (await aiof.read()).split(':'))
-      if hours * 60 + minutes < constants.SUBATHON_TIMER_ALERT_THRESHOLD:
-        if not sent_timer_alert:
-          discord_bot.log_info('sending subathon alert')
-          await alerts_channel.send(constants.SUBATHON_TIMER_ALERT_FORMAT.format(
-            constants.DISCORD_TIMER_ALERTS_ROLE_ID,
-            constants.BROADCASTER_CHANNEL
-          ))
-          sent_timer_alert = True
-          discord_bot.log_info('subathon alert sent')
-      else:
-        sent_timer_alert = False
-      await asyncio.sleep(constants.SUBATHON_TIMER_ALERT_TIMEOUT)
+        clock_text = await aiof.read()
+      if clock_text:
+        hours, minutes, __seconds = map(int, clock_text.split(':'))
+        print(f'[TIMER CHECK] {hours}:{minutes}:{__seconds}')
+        if hours * 60 + minutes < constants.SUBATHON_TIMER_ALERT_THRESHOLD:
+          if not sent_timer_alert:
+            discord_bot.log_info('sending subathon alert')
+            await alerts_channel.send(constants.SUBATHON_TIMER_ALERT_FORMAT.format(
+              constants.DISCORD_TIMER_ALERTS_ROLE_ID,
+              constants.BROADCASTER_CHANNEL
+            ))
+            sent_timer_alert = True
+            discord_bot.log_info('subathon alert sent')
+        else:
+          sent_timer_alert = False
+        await asyncio.sleep(constants.SUBATHON_TIMER_ALERT_TIMEOUT)
 
   async def live_indicator_task():
     # TODO: add logging
