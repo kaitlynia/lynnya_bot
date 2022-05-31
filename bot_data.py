@@ -14,7 +14,8 @@ class BotData(dict, Loggable):
     constants.DISCORD_PREFIX_KEY: constants.DEFAULT_PREFIX,
     constants.PETAL_PREFIX_KEY: constants.DEFAULT_PREFIX,
     'currency_emoji': constants.DEFAULT_CURRENCY_EMOJI,
-    'bal:sorted': []
+    'bal:sorted': [],
+    'daily_reminders_list': []
   }
 
   def __init__(self, path: str):

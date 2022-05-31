@@ -11,14 +11,14 @@ from peony import PeonyClient as TwitterBot
 from twitchio import Message as TwitchMessage
 from twitchio.ext import commands as twitch
 
-VERSION='0.2.3'
+VERSION='0.2.5'
 
 import constants
 import util
 from bot_data import BotData
 from context import Context
 from discord_bot import DiscordBot
-from petal_bot import PetalBot
+from petal_bot import PetalBot, PetalContext
 from twitch_bot import TwitchBot
 
 # load loot box items table
@@ -183,11 +183,13 @@ async def main():
   def add_command(coro, name=None):
     @twitch_bot.command(name=name or coro.__name__.replace('_command', ''))
     async def __twitch_command(ctx, *args):
-      await coro(Context(discord_bot, twitch_bot, ctx, data), *args)
+      await coro(Context(twitch_bot, discord_bot, petal_bot, ctx, data), *args)
 
     @discord_bot.command(name=name or coro.__name__.replace('_command', ''))
     async def __discord_command(ctx, *args):
-      await coro(Context(discord_bot, twitch_bot, ctx, data), *args)
+      await coro(Context(twitch_bot, discord_bot, petal_bot, ctx, data), *args)
+
+    petal_bot.add_command(name or coro.__name__.replace('_command', ''), coro)
 
   def add_commands(*coros):
     for coro in coros:
@@ -283,33 +285,42 @@ async def main():
 
   async def link_command(ctx: Context, *code):
     if ctx.source_type is discord.Context:
-      discord_to_twitch_key = f'discord:{ctx.source_id}'
-      if discord_to_twitch_key in data:
-        await ctx.reply('Your Discord account is already linked.')
-      else:
-        code = '%030x' % random.randrange(16**30)
-        data[f'link_code:{code}'] = ctx.source_id
-        link_for_key = f'link_for:{ctx.source_id}'
-        if link_for_key in data:
-          del data[f'link_code:{data[link_for_key]}']
-        data[link_for_key] = code
-        await data.save('link code generated')
-        await (await discord_bot.fetch_user(ctx.source_id)).send(f'Use `{data["prefix:twitch"]}link {code}` in Twitch chat (<https://twitch.tv/{constants.BROADCASTER_CHANNEL}/>) to link your account.')
-        await ctx.reply('A link code has been sent to you in a direct message.')
+      if not len(code):
+        return await ctx.reply('Twitch name required.')
+      code = code[0]
+      data[f'link:discord_{ctx.source_id}'] = code.lower()
+      await data.save(f'Twitch link for {code} started (discord_{ctx.source_id})')
+      await ctx.reply(f'Link started for `{code}`. Use `!link discord_{ctx.source_id}` in Twitch using that account to finish linking.')
     elif ctx.source_type is twitch.Context:
-      if len(code):
-        try:
-          link_key = f'link_code:{code[0]}'
-          discord_id = data[link_key]
-          data[f'discord:{discord_id}'] = ctx.source_id
-          del data[f'link_for:{discord_id}']
-          del data[link_key]
-          await data.save('link code used')
-          await ctx.reply('Your Discord account was successfully linked!')
-        except KeyError:
-          await ctx.reply('Invalid code.')
-      else:
-        await ctx.reply(f'Missing code argument. Use {data[constants.DISCORD_PREFIX_KEY]}link in Discord to link your accounts.')
+      if not len(code):
+        return await ctx.reply('Link code required. Use `!link TwitchName` in Discord/Petal to start linking.')
+      code = code[0]
+      try:
+        link_type, link_id = tuple(code.split('_', 1))
+        if link_type == 'discord':
+          if len(link_id) != 18 or not link_id.isdigit():
+            raise ValueError
+        elif link_type != 'petal':
+          raise ValueError
+      except ValueError:
+        return await ctx.reply('Invalid link code. Use `!link TwitchName` in Discord/Petal to start linking.')
+
+      code_key = f'link:{code}'
+      if (twitch_name := data.get(code_key)) is None:
+        return await ctx.reply('Invalid link code. Use `!link TwitchName` in Discord/Petal to start linking.')
+      if ctx.source_ctx.author.name != twitch_name:
+        return await ctx.reply('This link code was created for a different user. Use `!link TwitchName` in Discord/Petal to start linking.')
+      del data[code_key]
+      data[f'{link_type}:{link_id}'] = ctx.user_id
+      await data.save(f'Link finished for {twitch_name} (Code: {code})')
+      await ctx.reply(f'{link_type.capitalize()} account linked!')
+    elif ctx.source_type is PetalContext:
+      if not len(code):
+        return await ctx.reply('Link code required. Use `!link TwitchName` in Discord/Petal to start linking.')
+      code = code[0]
+      data[f'link:petal_{ctx.source_id}'] = code.lower()
+      await data.save(f'Twitch link for {code} started (petal_{ctx.source_id})')
+      await ctx.reply(f'Link started for `{code}`. Use `!link petal_{ctx.source_id}` in Twitch using that account to finish linking.')
 
   async def status_command(ctx: Context, *args):
     twitch_channel = await twitch_bot.fetch_channel(constants.BROADCASTER_CHANNEL)
@@ -349,6 +360,27 @@ async def main():
       response = await twitter_bot.api.statuses.update.post(status=status)
       await ctx.reply('Sent tweet!')
 
+  async def remind_command(ctx: Context, *args):
+    if ctx.source_type is not discord.Context:
+      return await ctx.reply('This command can only be used from Discord.')
+    if ctx.user_id is None:
+      return await reply_not_linked(ctx)
+    data['daily_reminders_list'].append(ctx.source_id)
+    await data.save('added Discord user to the daily reminders list')
+    await ctx.reply(f'I will now send you {data[constants.DISCORD_PREFIX_KEY]}daily reminders! If you want to un-subscribe from daily reminders, use `{data[constants.DISCORD_PREFIX_KEY]}unremind`')
+
+  async def unremind_command(ctx: Context, *args):
+    if ctx.source_type is not discord.Context:
+      return await ctx.reply('This command can only be used from Discord.')
+    if ctx.user_id is None:
+      return await reply_not_linked(ctx)
+    data['daily_reminders_list'].remove(ctx.source_id)
+    reminder_key = f'daily_reminder:{ctx.user_id}'
+    if reminder_key in data:
+      del data[reminder_key]
+    await data.save('removed Discord user from the daily reminders list')
+    await ctx.reply(f'I will not send you {data[constants.DISCORD_PREFIX_KEY]}daily reminders. If you want to re-subscribe, use `{data[constants.DISCORD_PREFIX_KEY]}remind`')
+
   async def daily_command(ctx: Context, *args):
     if ctx.user_id is None:
       return await reply_not_linked(ctx)
@@ -356,9 +388,14 @@ async def main():
       timestamp_key = f'daily_ts:{ctx.user_id}'
       now = time.time()
       subbed = await ctx.check_sub()
+      if subbed is None:
+        return await ctx.reply('Daily claims require your sub status to ensure the correct payout. Make sure to chat at least once in Twitch chat so that the sub status can be determined.')
 
       # if 12 hours have passed since the last daily claim
-      if now >= (timestamp := data.get(timestamp_key, 0)) + (60 * 60 * 12):
+      if now >= (time_next := (timestamp := data.get(timestamp_key, 0)) + (60 * 60 * 12)):
+        reminder_key = f'daily_reminder:{ctx.user_id}'
+        if reminder_key in data:
+          del data[reminder_key]
         data[timestamp_key] = now
         reward = random.randint(10, 100 if subbed else 50)
         bal_key = f'bal:{ctx.user_id}'
@@ -369,7 +406,9 @@ async def main():
         emoji = data['currency_emoji']
         await ctx.reply(f'Thanks for claiming your daily! Got {reward}{emoji} {" (sub bonus)" if subbed else ""}, Total: {bal}{emoji}')
       else:
-        await ctx.reply('You have already claimed a daily in the last 12 hours! Try again later.')
+        minutes_remaining = (time_next - now) // 60
+        hours, minutes = map(int, divmod(minutes_remaining, 60))
+        await ctx.reply(f'You have already claimed a daily recently. Try again in {hours} hour{"s" if hours != 1 else ""} and {minutes} minute{"s" if minutes != 1 else ""}.')
     else:
       await ctx.reply(f'Since {constants.BROADCASTER_CHANNEL} is not live, the daily command cannot be used.')
 
@@ -512,6 +551,10 @@ async def main():
   async def sub_command(ctx: Context, *args):
     if await ctx.check_sub():
       await ctx.reply('uwu yes you are a sub')
+    elif ctx.source_type is discord.Context:
+      await ctx.reply('wtf why aren\'t you subbed???? (if you\'re actually subbed, make sure your Twitch account is linked to your Discord account in the Connections page)')
+    elif ctx.source_type is PetalContext:
+      await ctx.reply('wtf why aren\'t you subbed???? (if you\'re actually subbed, this is an indication that you are not currently cached by Twitch as a chatter)')
     else:
       await ctx.reply('wtf why aren\'t you subbed????')
 
@@ -534,6 +577,8 @@ async def main():
     lcsg_command,
     twitter_command,
     youtube_command,
+    remind_command,
+    unremind_command,
     daily_command,
     lb_command,
     bal_command,
@@ -544,6 +589,20 @@ async def main():
     # usebox_command,
     sub_command
   )
+
+  async def daily_reminders_task():
+    await discord_bot.wait_until_ready()
+
+    for discord_id in data['daily_reminders_list']:
+      twitch_id = data[f'discord:{discord_id}']
+      reminder_key = f'daily_reminder:{twitch_id}'
+      if data.get(reminder_key) is not None:
+        continue
+
+      if time.time() >= data.get(f'daily_ts:{twitch_id}', 0) + (60 * 60 * 12):
+        await (await discord_bot.fetch_user(discord_id)).send('You can use the daily command again!')
+        data[reminder_key] = True
+        await data.save('stored reminder flag')
 
   async def subathon_task():
     await discord_bot.wait_until_ready()
@@ -594,6 +653,7 @@ async def main():
       await asyncio.sleep(constants.LIVE_INDICATOR_TIMEOUT)
 
   await discord_bot.login(constants.DISCORD_TOKEN)
+  asyncio.create_task(daily_reminders_task())
   asyncio.create_task(subathon_task())
   asyncio.create_task(live_indicator_task())
   asyncio.create_task(petal_bot.login())
