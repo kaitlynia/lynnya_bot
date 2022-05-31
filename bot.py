@@ -604,7 +604,7 @@ async def main():
           await (await discord_bot.fetch_user(discord_id)).send('You can use the daily command again!')
           data[reminder_key] = True
           await data.save('stored reminder flag')
-      asyncio.sleep(60)
+      await asyncio.sleep(60)
 
   async def subathon_task():
     await discord_bot.wait_until_ready()
