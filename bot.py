@@ -593,16 +593,18 @@ async def main():
   async def daily_reminders_task():
     await discord_bot.wait_until_ready()
 
-    for discord_id in data['daily_reminders_list']:
-      twitch_id = data[f'discord:{discord_id}']
-      reminder_key = f'daily_reminder:{twitch_id}'
-      if data.get(reminder_key) is not None:
-        continue
+    while discord_bot.is_ready():
+      for discord_id in data['daily_reminders_list']:
+        twitch_id = data[f'discord:{discord_id}']
+        reminder_key = f'daily_reminder:{twitch_id}'
+        if data.get(reminder_key) is not None:
+          continue
 
-      if time.time() >= data.get(f'daily_ts:{twitch_id}', 0) + (60 * 60 * 12):
-        await (await discord_bot.fetch_user(discord_id)).send('You can use the daily command again!')
-        data[reminder_key] = True
-        await data.save('stored reminder flag')
+        if time.time() >= data.get(f'daily_ts:{twitch_id}', 0) + (60 * 60 * 12):
+          await (await discord_bot.fetch_user(discord_id)).send('You can use the daily command again!')
+          data[reminder_key] = True
+          await data.save('stored reminder flag')
+      asyncio.sleep(60)
 
   async def subathon_task():
     await discord_bot.wait_until_ready()
