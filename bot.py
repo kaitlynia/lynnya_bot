@@ -594,42 +594,43 @@ async def main():
     await discord_bot.wait_until_ready()
 
     while discord_bot.is_ready():
-      for discord_id in data['daily_reminders_list']:
-        twitch_id = data[f'discord:{discord_id}']
-        reminder_key = f'daily_reminder:{twitch_id}'
-        if data.get(reminder_key) is not None:
-          continue
+      if await is_live():
+        for discord_id in data['daily_reminders_list']:
+          twitch_id = data[f'discord:{discord_id}']
+          reminder_key = f'daily_reminder:{twitch_id}'
+          if data.get(reminder_key) is not None:
+            continue
 
-        if time.time() >= data.get(f'daily_ts:{twitch_id}', 0) + (60 * 60 * 12):
-          await (await discord_bot.fetch_user(discord_id)).send('You can use the daily command again!')
-          data[reminder_key] = True
-          await data.save('stored reminder flag')
+          if time.time() >= data.get(f'daily_ts:{twitch_id}', 0) + (60 * 60 * 12):
+            await (await discord_bot.fetch_user(discord_id)).send('You can use the daily command again!')
+            data[reminder_key] = True
+            await data.save('stored reminder flag')
       await asyncio.sleep(60)
 
-  async def subathon_task():
-    await discord_bot.wait_until_ready()
+  # async def subathon_task():
+  #   await discord_bot.wait_until_ready()
 
-    alerts_channel = discord_bot.get_channel(constants.DISCORD_ALERTS_CHANNEL_ID)
-    sent_timer_alert = False
+  #   alerts_channel = discord_bot.get_channel(constants.DISCORD_ALERTS_CHANNEL_ID)
+  #   sent_timer_alert = False
 
-    while discord_bot.is_ready():
-      async with aiopen(constants.SUBATHON_TIMER_FILE) as aiof:
-        clock_text = await aiof.read()
-      if clock_text:
-        hours, minutes, __seconds = map(int, clock_text.split(':'))
-        print(f'[TIMER CHECK] {hours}:{minutes}:{__seconds}')
-        if hours * 60 + minutes < constants.SUBATHON_TIMER_ALERT_THRESHOLD:
-          if not sent_timer_alert:
-            discord_bot.log_info('sending subathon alert')
-            await alerts_channel.send(constants.SUBATHON_TIMER_ALERT_FORMAT.format(
-              constants.DISCORD_TIMER_ALERTS_ROLE_ID,
-              constants.BROADCASTER_CHANNEL
-            ))
-            sent_timer_alert = True
-            discord_bot.log_info('subathon alert sent')
-        else:
-          sent_timer_alert = False
-        await asyncio.sleep(constants.SUBATHON_TIMER_ALERT_TIMEOUT)
+  #   while discord_bot.is_ready():
+  #     async with aiopen(constants.SUBATHON_TIMER_FILE) as aiof:
+  #       clock_text = await aiof.read()
+  #     if clock_text:
+  #       hours, minutes, __seconds = map(int, clock_text.split(':'))
+  #       print(f'[TIMER CHECK] {hours}:{minutes}:{__seconds}')
+  #       if hours * 60 + minutes < constants.SUBATHON_TIMER_ALERT_THRESHOLD:
+  #         if not sent_timer_alert:
+  #           discord_bot.log_info('sending subathon alert')
+  #           await alerts_channel.send(constants.SUBATHON_TIMER_ALERT_FORMAT.format(
+  #             constants.DISCORD_TIMER_ALERTS_ROLE_ID,
+  #             constants.BROADCASTER_CHANNEL
+  #           ))
+  #           sent_timer_alert = True
+  #           discord_bot.log_info('subathon alert sent')
+  #       else:
+  #         sent_timer_alert = False
+  #       await asyncio.sleep(constants.SUBATHON_TIMER_ALERT_TIMEOUT)
 
   async def live_indicator_task():
     # TODO: add logging
@@ -656,7 +657,7 @@ async def main():
 
   await discord_bot.login(constants.DISCORD_TOKEN)
   asyncio.create_task(daily_reminders_task())
-  asyncio.create_task(subathon_task())
+  # asyncio.create_task(subathon_task())
   asyncio.create_task(live_indicator_task())
   asyncio.create_task(petal_bot.login())
   await asyncio.gather(*(bot.connect() for bot in [twitch_bot, discord_bot]))
